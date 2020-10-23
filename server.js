@@ -2,7 +2,8 @@ var database_url='mongodb+srv://kotharimanu2:kotharimanu2@usefulprogrammerpracti
 
 // server.js
 // where your node app starts
-mongoose.connect(database_url);
+
+
 // init project
 var express = require('express');
 var app = express();
@@ -12,6 +13,8 @@ var mongoose = require('mongoose');
 var bodyParser = require('body-parser')
 var shortid = require('shortid');
  
+
+mongoose.connect(database_url, { useNewUrlParser: true })
 // enable CORS (https://en.wikipedia.org/wiki/Cross-origin_resource_sharing)
 // so that your API is remotely testable by FCC 
 var cors = require('cors');
@@ -91,7 +94,7 @@ app.get("/api/timestamp/:date_string", (req, res) => {
 //url Shortening microservice
 
 
-var shortURL=moongoose.model("shortURL",new Schema({
+var shortURL=mongoose.model("shortURL",new mongoose.Schema({
   short_url:String,
   original_url:String,
   suffix:String
@@ -132,6 +135,117 @@ app.get("/api/shorturl/:suffix",(req,res)=>{
     res.redirect(urlForRedirect.original_url);
   })
 });
+
+//Exercise Tracker 
+
+let exerciseSessionSchema = new mongoose.Schema({
+  description: {type: String, required: true},
+  duration: {type: Number, required: true},
+  date: String
+})
+
+let userSchema = new mongoose.Schema({
+  username: {type: String, required: true},
+  log: [exerciseSessionSchema]
+})
+
+let Session = mongoose.model('Session', exerciseSessionSchema)
+let User = mongoose.model('User', userSchema)
+
+app.post('/api/exercise/new-user', bodyParser.urlencoded({ extended: false }), (request, response) => {
+  let newUser = new User({username: request.body.username})
+  newUser.save((error, savedUser) => {
+    if(!error){
+      let responseObject = {}
+      responseObject['username'] = savedUser.username
+      responseObject['_id'] = savedUser.id
+      response.json(responseObject)
+    }
+  })
+})
+
+app.get('/api/exercise/users', (request, response) => {
+  
+  User.find({}, (error, arrayOfUsers) => {
+    if(!error){
+      response.json(arrayOfUsers)
+    }
+  })
+  
+})
+
+app.post('/api/exercise/add', bodyParser.urlencoded({ extended: false }) , (request, response) => {
+  
+  let newSession = new Session({
+    description: request.body.description,
+    duration: parseInt(request.body.duration),
+    date: request.body.date
+  })
+  
+  if(newSession.date === ''){
+    newSession.date = new Date().toISOString().substring(0, 10)
+  }
+  
+  User.findByIdAndUpdate(
+    request.body.userId,
+    {$push : {log: newSession}},
+    {new: true},
+    (error, updatedUser)=> {
+      if(!error){
+        let responseObject = {}
+        responseObject['_id'] = updatedUser.id
+        responseObject['username'] = updatedUser.username
+        responseObject['date'] = new Date(newSession.date).toDateString()
+        responseObject['description'] = newSession.description
+        responseObject['duration'] = newSession.duration
+        response.json(responseObject)
+      }
+    }
+  )
+})
+
+app.get('/api/exercise/log', (request, response) => {
+  
+  User.findById(request.query.userId, (error, result) => {
+    if(!error){
+      let responseObject = result
+      
+      if(request.query.from || request.query.to){
+        
+        let fromDate = new Date(0)
+        let toDate = new Date()
+        
+        if(request.query.from){
+          fromDate = new Date(request.query.from)
+        }
+        
+        if(request.query.to){
+          toDate = new Date(request.query.to)
+        }
+        
+        fromDate = fromDate.getTime()
+        toDate = toDate.getTime()
+        
+        responseObject.log = responseObject.log.filter((session) => {
+          let sessionDate = new Date(session.date).getTime()
+          
+          return sessionDate >= fromDate && sessionDate <= toDate
+          
+        })
+        
+      }
+      
+      if(request.query.limit){
+        responseObject.log = responseObject.log.slice(0, request.query.limit)
+      }
+      
+      responseObject = responseObject.toJSON()
+      responseObject['count'] = result.log.length
+      response.json(responseObject)
+    }
+  })
+  
+})
 
 
 // listen for requests :)
