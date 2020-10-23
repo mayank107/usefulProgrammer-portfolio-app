@@ -12,7 +12,7 @@ var mongo = require('mongodb');
 var mongoose = require('mongoose');
 var bodyParser = require('body-parser')
 var shortid = require('shortid');
- 
+ var multer= require('multer');
 
 mongoose.connect(database_url, { useNewUrlParser: true })
 // enable CORS (https://en.wikipedia.org/wiki/Cross-origin_resource_sharing)
@@ -246,6 +246,17 @@ app.get('/api/exercise/log', (request, response) => {
   })
   
 })
+
+//File Metadata
+
+app.post('/api/fileanalyse', multer().single('upfile'), (request, response) => {
+  let responseObject = {}
+  responseObject['name'] = request.file.originalname
+  responseObject['type'] = request.file.mimetype
+  responseObject['size'] = request.file.size
+  
+  response.json(responseObject)
+} )
 
 
 // listen for requests :)
